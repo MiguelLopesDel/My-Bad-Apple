@@ -1,19 +1,27 @@
 package dev.badapple.render.backends;
 
+import dev.badapple.render.Ansi;
+import dev.badapple.render.AnsiColor;
+import dev.badapple.render.ColorDepth;
 import dev.badapple.render.Colorizer;
 import dev.badapple.render.GrayGrid;
 import dev.badapple.render.Renderer;
 
 /**
  * Universal text renderer using the upper-half-block glyph {@code ▀}: the glyph's
- * foreground color paints the top subpixel and the background color paints the bottom one,
- * doubling vertical resolution. Emits truecolor SGR with per-cell diffing (a color escape
- * is written only when it changes) and resets at each line end to prevent color bleed.
+ * foreground color paints the top subpixel and the background the bottom one, doubling
+ * vertical resolution. Emits SGR at the terminal's {@link ColorDepth} with per-cell diffing
+ * and resets at each line end to prevent color bleed.
  */
 public final class HalfBlockRenderer implements Renderer {
 
     private static final char UPPER_HALF = '▀';
-    private static final String CSI = "[";
+
+    private final ColorDepth depth;
+
+    public HalfBlockRenderer(ColorDepth depth) {
+        this.depth = depth;
+    }
 
     @Override
     public void render(GrayGrid grid, Colorizer colorizer, double t, StringBuilder out) {
@@ -24,7 +32,7 @@ public final class HalfBlockRenderer implements Renderer {
         int maxY = Math.max(1, subRows - 1);
 
         for (int r = 0; r < textRows; r++) {
-            out.append(CSI).append(r + 1).append(";1H");
+            Ansi.moveTo(out, r + 1, 1);
             int lastFg = -1;
             int lastBg = -1;
             int yTop = r * 2;
@@ -36,23 +44,16 @@ public final class HalfBlockRenderer implements Renderer {
                 int fg = colorizer.rgb(xN, yTopN, grid.get(c, yTop), t) & 0xFFFFFF;
                 int bg = colorizer.rgb(xN, yBotN, grid.get(c, yBot), t) & 0xFFFFFF;
                 if (fg != lastFg) {
-                    appendColor(out, true, fg);
+                    AnsiColor.appendFg(out, fg, depth);
                     lastFg = fg;
                 }
                 if (bg != lastBg) {
-                    appendColor(out, false, bg);
+                    AnsiColor.appendBg(out, bg, depth);
                     lastBg = bg;
                 }
                 out.append(UPPER_HALF);
             }
-            out.append(CSI).append("0m");
+            out.append(Ansi.RESET);
         }
-    }
-
-    private static void appendColor(StringBuilder out, boolean foreground, int rgb) {
-        out.append(CSI).append(foreground ? "38;2;" : "48;2;")
-                .append((rgb >> 16) & 0xFF).append(';')
-                .append((rgb >> 8) & 0xFF).append(';')
-                .append(rgb & 0xFF).append('m');
     }
 }

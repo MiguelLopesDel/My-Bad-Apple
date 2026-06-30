@@ -4,6 +4,8 @@ import dev.badapple.render.backends.HalfBlockRenderer;
 import dev.badapple.render.colorizers.MonoColorizer;
 import org.junit.jupiter.api.Test;
 
+import static dev.badapple.render.ColorDepth.TRUECOLOR;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -15,7 +17,7 @@ class HalfBlockRendererTest {
         grid.fill(1f);
         StringBuilder out = new StringBuilder();
 
-        new HalfBlockRenderer().render(grid, new MonoColorizer(), 0.0, out);
+        new HalfBlockRenderer(TRUECOLOR).render(grid, new MonoColorizer(), 0.0, out);
         String s = out.toString();
 
         // one half-block glyph per cell
@@ -35,7 +37,7 @@ class HalfBlockRendererTest {
         grid.fill(0.5f);
         StringBuilder out = new StringBuilder();
 
-        new HalfBlockRenderer().render(grid, new MonoColorizer(), 0.0, out);
+        new HalfBlockRenderer(TRUECOLOR).render(grid, new MonoColorizer(), 0.0, out);
         String s = out.toString();
 
         // uniform row: foreground color set once despite five cells
