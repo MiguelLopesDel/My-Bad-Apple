@@ -55,6 +55,15 @@ tasks.register<JavaExec>("preview") {
     args = ((project.findProperty("args") as String?) ?: "3000 100 45").split(" ")
 }
 
+// Headless 2x2 PNG of all four color modes for a frame, for visual inspection.
+tasks.register<JavaExec>("colorPreview") {
+    group = "verification"
+    description = "Renders one frame in all color modes to a PNG (args: 'outPng frame')"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.badapple.debug.ColorPreview"
+    args = ((project.findProperty("args") as String?) ?: "color-preview.png 3000").split(" ")
+}
+
 tasks.shadowJar {
     archiveBaseName = "my-bad-apple"
     archiveClassifier = ""
