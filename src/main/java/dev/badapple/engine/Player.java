@@ -431,7 +431,15 @@ public final class Player {
             int gridW = Math.max(1, gs.width());
             int gridH = Math.max(1, gs.height());
 
-            double aspect = (double) asset.width() / asset.height();
+            // A grid unit is rarely square: it's (cellWidth / horizontalSubpixels) by
+            // (cellHeight / verticalSubpixels) physical pixels. Correct for that so the image
+            // keeps its real aspect instead of being stretched (badly so for 2x2 quadrants).
+            int cw = caps.cellWidthPx > 0 ? caps.cellWidthPx : 10;
+            int ch = caps.cellHeightPx > 0 ? caps.cellHeightPx : 20;
+            double hUnitPx = (double) cols * cw / gridW;
+            double vUnitPx = (double) rows * ch / gridH;
+            double aspect = (double) asset.width() / asset.height() * (vUnitPx / hUnitPx);
+
             int imgW;
             int imgH;
             if ((double) gridW / gridH > aspect) {
