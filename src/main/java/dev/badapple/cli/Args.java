@@ -74,6 +74,12 @@ public final class Args {
                   --no-audio         play without sound
                   --debug            print detected capabilities and exit
                   -h, --help         show this help
+
+                Controls:
+                  space              pause / resume
+                  left / right       seek -5s / +5s
+                  up / down, +/-     speed up / slow down
+                  q, Esc             quit
                 """;
     }
 
