@@ -26,6 +26,7 @@ import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.concurrent.locks.LockSupport;
 
 /**
  * Drives playback: detects the terminal, picks a renderer, then renders frames against a
@@ -51,6 +52,7 @@ public final class Player {
     private volatile boolean resized;
     private double emaRenderMs;
     private double emaWriteMs;
+    private double emaIdleMs;
 
     public Player(AssetReader asset, Colorizer colorizer, InputStream audioStream, Args args) {
         this.asset = asset;
@@ -220,7 +222,10 @@ public final class Player {
                 hudShown = false;
             }
 
-            if (handleInput(reader, timeline, pacingBudgetMs(timeline, idx, fps))) {
+            long p0 = System.nanoTime();
+            boolean quit = pace(reader, timeline, pacingBudgetMs(timeline, idx, fps));
+            emaIdleMs = ema(emaIdleMs, (System.nanoTime() - p0) / 1e6);
+            if (quit) {
                 break;
             }
         }
@@ -258,8 +263,8 @@ public final class Player {
         int col = Math.max(1, cols - label.length() + 1);
         int fg = fps >= 0.9 * targetFps ? HUD_GREEN : fps >= 0.6 * targetFps ? HUD_YELLOW : HUD_RED;
 
-        String timing = String.format(Locale.ROOT, " render %.1f · write %.1f ms ",
-                emaRenderMs, emaWriteMs);
+        String timing = String.format(Locale.ROOT, " render %.1f · write %.1f · idle %.0f ms ",
+                emaRenderMs, emaWriteMs, emaIdleMs);
         int col2 = Math.max(1, cols - timing.length() + 1);
 
         hud.setLength(0);
@@ -291,42 +296,54 @@ public final class Player {
         }
     }
 
-    /** Reads keys until the given budget elapses (which also paces the loop). Returns true to quit. */
-    private boolean handleInput(NonBlockingReader reader, Timeline timeline, long budgetMs) throws Exception {
-        long end = System.currentTimeMillis() + budgetMs;
-        long remaining;
-        while ((remaining = end - System.currentTimeMillis()) > 0) {
-            int c = reader.read(remaining);
-            if (c == NonBlockingReader.READ_EXPIRED) {
-                break;
-            }
-            if (c < 0 || c == 'q' || c == 'Q' || c == 3) {
-                return true;
-            }
-            switch (c) {
-                case ' ' -> timeline.togglePause();
-                case '+', '=' -> timeline.changeSpeed(1.25);
-                case '-', '_' -> timeline.changeSpeed(0.8);
-                case 8 -> showHud = !showHud; // Ctrl-H
-                case 27 -> {
-                    if (handleEscape(reader, timeline)) {
-                        return true;
-                    }
+    /**
+     * Paces the loop until the budget elapses while staying responsive to input. Waits with
+     * {@link LockSupport#parkNanos} — which honors the requested time precisely — instead of a
+     * blocking timed read, whose timeout JLine can overshoot badly on some terminals. Returns
+     * true to quit.
+     */
+    private boolean pace(NonBlockingReader reader, Timeline timeline, long budgetMs) throws Exception {
+        long deadline = System.nanoTime() + budgetMs * 1_000_000L;
+        while (true) {
+            while (reader.ready()) {
+                if (handleKey(reader, timeline, reader.read())) {
+                    return true;
                 }
-                default -> { /* ignore */ }
             }
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                return false;
+            }
+            LockSupport.parkNanos(Math.min(remaining, 3_000_000L));
+        }
+    }
+
+    /** Dispatches one key. Returns true to quit. */
+    private boolean handleKey(NonBlockingReader reader, Timeline timeline, int c) throws Exception {
+        if (c < 0 || c == 'q' || c == 'Q' || c == 3) {
+            return true;
+        }
+        switch (c) {
+            case ' ' -> timeline.togglePause();
+            case '+', '=' -> timeline.changeSpeed(1.25);
+            case '-', '_' -> timeline.changeSpeed(0.8);
+            case 8 -> showHud = !showHud; // Ctrl-H
+            case 27 -> {
+                return handleEscape(reader, timeline);
+            }
+            default -> { /* ignore */ }
         }
         return false;
     }
 
     /** Handles an escape sequence (arrow keys); a lone ESC quits. */
     private boolean handleEscape(NonBlockingReader reader, Timeline timeline) throws Exception {
-        int c2 = reader.read(20);
-        if (c2 == NonBlockingReader.READ_EXPIRED) {
+        int c2 = awaitByte(reader, 40);
+        if (c2 < 0) {
             return true; // lone ESC: quit
         }
         if (c2 == '[' || c2 == 'O') {
-            int c3 = reader.read(20);
+            int c3 = awaitByte(reader, 40);
             switch (c3) {
                 case 'C' -> timeline.seek(SEEK_SECONDS);   // right
                 case 'D' -> timeline.seek(-SEEK_SECONDS);  // left
@@ -336,6 +353,20 @@ public final class Player {
             }
         }
         return false;
+    }
+
+    /** Waits up to {@code budgetMs} for one buffered byte (parkNanos polling); -1 on timeout. */
+    private int awaitByte(NonBlockingReader reader, long budgetMs) throws Exception {
+        long deadline = System.nanoTime() + budgetMs * 1_000_000L;
+        while (true) {
+            if (reader.ready()) {
+                return reader.read();
+            }
+            if (System.nanoTime() >= deadline) {
+                return -1;
+            }
+            LockSupport.parkNanos(1_000_000L);
+        }
     }
 
     /** Holds the current sizing, recomputed on resize. */
