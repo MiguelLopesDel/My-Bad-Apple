@@ -11,9 +11,6 @@ import java.util.Locale;
  * Chooses a render backend from detected capabilities, honoring an explicit {@code --renderer}
  * override. Auto priority: image protocols (kitty &gt; iTerm &gt; sixel) when available,
  * otherwise half-blocks for color+Unicode terminals, falling back to ASCII.
- *
- * <p>The image backends are added in a later phase; until then those choices fall back to
- * half-blocks so the surface is stable.
  */
 public final class RendererFactory {
 
@@ -25,14 +22,23 @@ public final class RendererFactory {
         return switch (choice) {
             case "ascii" -> new AsciiRenderer(caps.colorDepth);
             case "halfblock" -> new HalfBlockRenderer(colorOrDefault(caps.colorDepth));
-            // Image backends not yet available: fall back without erroring.
-            case "kitty", "sixel", "iterm" -> new HalfBlockRenderer(colorOrDefault(caps.colorDepth));
+            case "kitty" -> new KittyRenderer();
+            case "sixel" -> new SixelRenderer();
+            case "iterm" -> new ITermRenderer();
             default -> auto(caps);
         };
     }
 
     private static Renderer auto(TerminalCapabilities caps) {
-        // Image protocols will take priority here once their backends land.
+        if (caps.kitty) {
+            return new KittyRenderer();
+        }
+        if (caps.iterm) {
+            return new ITermRenderer();
+        }
+        if (caps.sixel) {
+            return new SixelRenderer();
+        }
         if (!caps.unicode || caps.colorDepth == ColorDepth.NONE) {
             return new AsciiRenderer(caps.colorDepth);
         }

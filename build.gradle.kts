@@ -64,6 +64,15 @@ tasks.register<JavaExec>("colorPreview") {
     args = ((project.findProperty("args") as String?) ?: "color-preview.png 3000").split(" ")
 }
 
+// Extracts the PNG the kitty backend would transmit, for visual inspection of image mode.
+tasks.register<JavaExec>("imageDump") {
+    group = "verification"
+    description = "Dumps the kitty backend's PNG for a frame (args: 'outPng frame color palette')"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.badapple.debug.ImageDump"
+    args = ((project.findProperty("args") as String?) ?: "image-dump.png 3000 lut fire").split(" ")
+}
+
 tasks.shadowJar {
     archiveBaseName = "my-bad-apple"
     archiveClassifier = ""

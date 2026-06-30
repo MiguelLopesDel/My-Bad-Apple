@@ -74,7 +74,7 @@ public final class Player {
                 clock = new PlaybackClock.Wall();
             }
 
-            runLoop(terminal, w, renderer, clock);
+            runLoop(terminal, w, renderer, clock, caps);
         } finally {
             if (audio != null) {
                 audio.close();
@@ -87,31 +87,35 @@ public final class Player {
         }
     }
 
-    private void runLoop(Terminal terminal, PrintWriter w, Renderer renderer, PlaybackClock clock)
-            throws InterruptedException {
+    private void runLoop(Terminal terminal, PrintWriter w, Renderer renderer, PlaybackClock clock,
+                         TerminalCapabilities caps) throws InterruptedException {
         int cols = Math.max(1, terminal.getWidth());
         int rows = Math.max(1, terminal.getHeight());
-        int subRows = rows * 2;
 
-        // Fit the source aspect ratio inside the terminal, letterboxing the rest.
+        // The renderer decides the grid resolution: cells for text, pixels for image backends.
+        Renderer.GridSize gs = renderer.gridSize(cols, rows, caps.cellWidthPx, caps.cellHeightPx);
+        int gridW = Math.max(1, gs.width());
+        int gridH = Math.max(1, gs.height());
+
+        // Fit the source aspect ratio inside the grid, letterboxing the rest.
         double aspect = (double) asset.width() / asset.height();
         int imgW;
         int imgH;
-        if ((double) cols / subRows > aspect) {
-            imgH = subRows;
-            imgW = Math.max(1, (int) Math.round(subRows * aspect));
+        if ((double) gridW / gridH > aspect) {
+            imgH = gridH;
+            imgW = Math.max(1, (int) Math.round(gridH * aspect));
         } else {
-            imgW = cols;
-            imgH = Math.max(1, (int) Math.round(cols / aspect));
+            imgW = gridW;
+            imgH = Math.max(1, (int) Math.round(gridW / aspect));
         }
-        imgW = Math.min(imgW, cols);
-        imgH = Math.min(imgH, subRows);
-        int offsetX = (cols - imgW) / 2;
-        int offsetY = (subRows - imgH) / 2;
+        imgW = Math.min(imgW, gridW);
+        imgH = Math.min(imgH, gridH);
+        int offsetX = (gridW - imgW) / 2;
+        int offsetY = (gridH - imgH) / 2;
 
         GrayGrid image = new GrayGrid(imgW, imgH);
-        GrayGrid screen = new GrayGrid(cols, subRows);
-        StringBuilder sb = new StringBuilder(cols * subRows * 4);
+        GrayGrid screen = new GrayGrid(gridW, gridH);
+        StringBuilder sb = new StringBuilder(gridW * gridH * 4);
 
         int frameCount = asset.frameCount();
         double fps = asset.fps() > 0 ? asset.fps() : 30.0;
