@@ -18,6 +18,7 @@ import java.io.InputStream;
 public final class Main {
 
     private static final String ASSET = "/badapple/frames.bin";
+    private static final String AUDIO = "/badapple/audio.mp3";
 
     private Main() {
     }
@@ -33,7 +34,9 @@ public final class Main {
             AssetReader asset = AssetReader.load(in);
             Renderer renderer = new HalfBlockRenderer();
             Colorizer colorizer = new MonoColorizer();
-            new Player(asset, renderer, colorizer).play();
+            // Audio stream is owned by the player thread for the whole run; not closed here.
+            InputStream audio = Main.class.getResourceAsStream(AUDIO);
+            new Player(asset, renderer, colorizer, audio).play();
         }
     }
 }

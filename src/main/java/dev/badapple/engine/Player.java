@@ -9,11 +9,13 @@ import dev.badapple.render.Renderer;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
+import java.io.InputStream;
 import java.io.PrintWriter;
 
 /**
- * Drives playback: sizes the image to the terminal, then renders frames on a fixed clock,
- * dropping frames when it falls behind. Audio sync replaces the fixed clock in a later phase.
+ * Drives playback: sizes the image to the terminal, then renders frames against a master
+ * {@link PlaybackClock}. Audio (when present) is the clock, so video follows the real sound
+ * output; frames are dropped whenever the clock has moved past them.
  */
 public final class Player {
 
@@ -27,11 +29,13 @@ public final class Player {
     private final AssetReader asset;
     private final Renderer renderer;
     private final Colorizer colorizer;
+    private final InputStream audioStream;
 
-    public Player(AssetReader asset, Renderer renderer, Colorizer colorizer) {
+    public Player(AssetReader asset, Renderer renderer, Colorizer colorizer, InputStream audioStream) {
         this.asset = asset;
         this.renderer = renderer;
         this.colorizer = colorizer;
+        this.audioStream = audioStream;
     }
 
     public void play() throws Exception {
@@ -43,12 +47,30 @@ public final class Player {
             w.flush();
         });
         Runtime.getRuntime().addShutdownHook(restore);
+
+        AudioPlayer audio = null;
         try {
             w.print(ALT_SCREEN_ON);
             w.print(HIDE_CURSOR);
             w.flush();
-            runLoop(terminal, w);
+
+            PlaybackClock clock;
+            if (audioStream != null) {
+                audio = new AudioPlayer(audioStream);
+                audio.start();
+            }
+            if (audio != null && !audio.isFailed()) {
+                final AudioPlayer a = audio;
+                clock = a::positionSeconds;
+            } else {
+                clock = new PlaybackClock.Wall();
+            }
+
+            runLoop(terminal, w, clock, audio);
         } finally {
+            if (audio != null) {
+                audio.close();
+            }
             Runtime.getRuntime().removeShutdownHook(restore);
             w.print(SHOW_CURSOR);
             w.print(ALT_SCREEN_OFF);
@@ -57,7 +79,8 @@ public final class Player {
         }
     }
 
-    private void runLoop(Terminal terminal, PrintWriter w) throws InterruptedException {
+    private void runLoop(Terminal terminal, PrintWriter w, PlaybackClock clock, AudioPlayer audio)
+            throws InterruptedException {
         int cols = Math.max(1, terminal.getWidth());
         int rows = Math.max(1, terminal.getHeight());
         int subRows = rows * 2;
@@ -84,35 +107,38 @@ public final class Player {
 
         int frameCount = asset.frameCount();
         double fps = asset.fps() > 0 ? asset.fps() : 30.0;
-        double frameNs = 1_000_000_000.0 / fps;
-        long startNs = System.nanoTime();
+        int lastRendered = -1;
 
-        for (int i = 0; i < frameCount; i++) {
-            long target = startNs + (long) (i * frameNs);
-            long now = System.nanoTime();
-            // Drop frames we're already more than one frame late for (except the last).
-            if (now - target > frameNs && i < frameCount - 1) {
-                continue;
+        while (true) {
+            double t = clock.seconds();
+            int idx = (int) Math.floor(t * fps);
+            if (idx >= frameCount) {
+                break;
             }
-            long wait = target - System.nanoTime();
-            if (wait > 0) {
-                Thread.sleep(wait / 1_000_000, (int) (wait % 1_000_000));
+            if (idx < 0) {
+                idx = 0;
             }
-
-            Frame frame = asset.frameAt(i);
-            Downscaler.downscale(frame, image);
-            screen.fill(0f);
-            for (int y = 0; y < imgH; y++) {
-                for (int x = 0; x < imgW; x++) {
-                    screen.set(offsetX + x, offsetY + y, image.get(x, y));
+            if (idx > lastRendered) {
+                Frame frame = asset.frameAt(idx);
+                Downscaler.downscale(frame, image);
+                screen.fill(0f);
+                for (int y = 0; y < imgH; y++) {
+                    for (int x = 0; x < imgW; x++) {
+                        screen.set(offsetX + x, offsetY + y, image.get(x, y));
+                    }
                 }
+                sb.setLength(0);
+                renderer.render(screen, colorizer, (double) idx / frameCount, sb);
+                w.print(CURSOR_HOME);
+                w.print(sb);
+                w.flush();
+                lastRendered = idx;
             }
 
-            sb.setLength(0);
-            renderer.render(screen, colorizer, (double) i / frameCount, sb);
-            w.print(CURSOR_HOME);
-            w.print(sb);
-            w.flush();
+            // Sleep until the next frame boundary, re-reading the clock to stay in sync.
+            double next = (lastRendered + 1) / fps;
+            long ms = (long) ((next - clock.seconds()) * 1000);
+            Thread.sleep(ms > 1 ? Math.min(ms, 50) : 1);
         }
     }
 }
