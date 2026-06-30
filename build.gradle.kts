@@ -73,6 +73,15 @@ tasks.register<JavaExec>("imageDump") {
     args = ((project.findProperty("args") as String?) ?: "image-dump.png 3000 lut fire").split(" ")
 }
 
+// Headless dump of the quadrant renderer's glyphs (ANSI stripped) for visual sanity.
+tasks.register<JavaExec>("quadDump") {
+    group = "verification"
+    description = "Prints one frame via the quadrant renderer (args: 'frame cols rows')"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.badapple.debug.QuadDump"
+    args = ((project.findProperty("args") as String?) ?: "3000 80 24").split(" ")
+}
+
 // Headless per-frame benchmark (no terminal) to locate the playback bottleneck.
 tasks.register<JavaExec>("bench") {
     group = "verification"

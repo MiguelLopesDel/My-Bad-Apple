@@ -69,7 +69,7 @@ public final class Args {
                 Options:
                   --color <mode>     mono | hue | gradient | lut   (default: mono)
                   --palette <name>   fire | neon | aurora | ice    (gradient/lut)
-                  --renderer <id>    auto | kitty | sixel | iterm | halfblock | ascii
+                  --renderer <id>    auto | quadrant | halfblock | ascii | kitty | sixel | iterm
                   --force            ignore terminal capability detection
                   --no-audio         play without sound
                   --debug            print detected capabilities and exit

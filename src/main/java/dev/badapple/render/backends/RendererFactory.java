@@ -9,10 +9,11 @@ import java.util.Locale;
 
 /**
  * Chooses a render backend from detected capabilities, honoring an explicit {@code --renderer}
- * override. Auto prefers half-blocks (fast enough for smooth 30fps with full truecolor),
- * falling back to ASCII on terminals without Unicode or color. The image protocols
- * (kitty/iTerm/sixel) are higher fidelity but re-encode every frame and can't sustain the
- * frame rate, so they're opt-in via {@code --renderer} rather than auto-selected.
+ * override. Auto prefers quadrant blocks (2x2 subpixels per cell — the sharpest text option,
+ * and fast enough for smooth 30fps), falling back to half-blocks and then ASCII on terminals
+ * without Unicode or color. The image protocols (kitty/iTerm/sixel) are higher fidelity but
+ * re-encode every frame and can't sustain the frame rate, so they're opt-in via
+ * {@code --renderer} rather than auto-selected.
  */
 public final class RendererFactory {
 
@@ -24,6 +25,7 @@ public final class RendererFactory {
         return switch (choice) {
             case "ascii" -> new AsciiRenderer(caps.colorDepth);
             case "halfblock" -> new HalfBlockRenderer(colorOrDefault(caps.colorDepth));
+            case "quadrant" -> new QuadrantRenderer(colorOrDefault(caps.colorDepth));
             case "kitty" -> new KittyRenderer();
             case "sixel" -> new SixelRenderer();
             case "iterm" -> new ITermRenderer();
@@ -35,7 +37,7 @@ public final class RendererFactory {
         if (!caps.unicode || caps.colorDepth == ColorDepth.NONE) {
             return new AsciiRenderer(caps.colorDepth);
         }
-        return new HalfBlockRenderer(caps.colorDepth);
+        return new QuadrantRenderer(caps.colorDepth);
     }
 
     private static ColorDepth colorOrDefault(ColorDepth depth) {

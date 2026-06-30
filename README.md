@@ -39,6 +39,10 @@ java -jar build/libs/my-bad-apple.jar
 
 That's it — no ffmpeg, no native libraries, no extra setup.
 
+Run with no options and you get an **interactive start menu** to pick the color mode, palette,
+renderer and audio — arrow keys to move/change, Enter to play (just press Enter for the classic
+mono look). Pass any flag to skip the menu and run directly.
+
 ### Options
 
 | Flag | Description |
@@ -65,17 +69,19 @@ That's it — no ffmpeg, no native libraries, no extra setup.
 
 The player probes the terminal and falls back gracefully, so it runs everywhere.
 
-Auto-selection prefers **half-blocks** because they render fast enough for smooth 30fps with
-full truecolor — and on a 1-bit source like Bad Apple they look great:
+Auto-selection prefers **quadrant blocks** (a 2×2 subpixel grid per character — the sharpest
+text option) because they render fast enough for smooth 30fps with full truecolor, and on a
+1-bit source like Bad Apple they look crisp:
 
 | Terminal | Auto backend |
 |----------|--------------|
-| Most truecolor terminals (kitty, foot, Alacritty, Konsole, GNOME Terminal, WezTerm…) | half-blocks, 24-bit color |
-| VS Code / IntelliJ integrated terminals | half-blocks, 256 color |
+| Most truecolor terminals (kitty, foot, Alacritty, Konsole, GNOME Terminal, WezTerm…) | quadrant blocks, 24-bit color |
+| VS Code / IntelliJ integrated terminals | quadrant blocks, 256 color |
 | no UTF-8 / minimal terminals | ASCII |
 
-The image protocols (`kitty`, `iterm`, `sixel`) are higher fidelity but re-encode the whole
-frame every frame, so they can't sustain the frame rate. They're available on demand via
+`--renderer halfblock` gives the smoother (lower-resolution) 1×2 look if you prefer it. The
+image protocols (`kitty`, `iterm`, `sixel`) are higher fidelity but re-encode the whole frame
+every frame, so they can't sustain the frame rate. They're available on demand via
 `--renderer kitty|iterm|sixel` (great for a paused still), just not auto-selected.
 
 Run with `--debug` to see exactly what was detected, and press `Ctrl-H` during playback to see

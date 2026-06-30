@@ -2,6 +2,7 @@ package dev.badapple;
 
 import dev.badapple.asset.AssetReader;
 import dev.badapple.cli.Args;
+import dev.badapple.cli.Launcher;
 import dev.badapple.engine.Player;
 import dev.badapple.render.Colorizer;
 import dev.badapple.render.colorizers.Colorizers;
@@ -23,6 +24,20 @@ public final class Main {
     }
 
     public static void main(String[] argv) throws Exception {
+        // No options: show the interactive start menu and use what it returns.
+        if (argv.length == 0) {
+            String[] chosen = new Launcher().run();
+            if (chosen == null) {
+                return; // user quit the menu
+            }
+            if (chosen.length == 0) {
+                // No interactive terminal (piped/redirected): show help instead of playing to nowhere.
+                System.out.print(Args.help());
+                return;
+            }
+            argv = chosen;
+        }
+
         Args args = Args.parse(argv);
         if (args.help) {
             System.out.print(Args.help());

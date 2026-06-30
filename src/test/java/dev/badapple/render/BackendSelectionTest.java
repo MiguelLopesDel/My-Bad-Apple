@@ -3,6 +3,7 @@ package dev.badapple.render;
 import dev.badapple.cli.Args;
 import dev.badapple.render.backends.AsciiRenderer;
 import dev.badapple.render.backends.HalfBlockRenderer;
+import dev.badapple.render.backends.QuadrantRenderer;
 import dev.badapple.render.backends.RendererFactory;
 import dev.badapple.render.colorizers.MonoColorizer;
 import dev.badapple.terminal.TerminalCapabilities;
@@ -19,11 +20,20 @@ class BackendSelectionTest {
     }
 
     @Test
-    void autoPicksHalfBlockForColorUnicodeTerminal() {
+    void autoPicksQuadrantForColorUnicodeTerminal() {
         TerminalCapabilities caps = new TerminalCapabilities();
         caps.unicode = true;
         caps.colorDepth = ColorDepth.TRUECOLOR;
-        assertInstanceOf(HalfBlockRenderer.class, RendererFactory.create(caps, autoArgs()));
+        assertInstanceOf(QuadrantRenderer.class, RendererFactory.create(caps, autoArgs()));
+    }
+
+    @Test
+    void explicitHalfblockStillAvailable() {
+        TerminalCapabilities caps = new TerminalCapabilities();
+        caps.unicode = true;
+        caps.colorDepth = ColorDepth.TRUECOLOR;
+        assertInstanceOf(HalfBlockRenderer.class,
+                RendererFactory.create(caps, Args.parse(new String[]{"--renderer", "halfblock"})));
     }
 
     @Test

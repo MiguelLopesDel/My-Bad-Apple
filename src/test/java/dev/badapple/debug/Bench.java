@@ -10,6 +10,7 @@ import dev.badapple.render.GrayGrid;
 import dev.badapple.render.LineRenderer;
 import dev.badapple.render.Renderer;
 import dev.badapple.render.backends.HalfBlockRenderer;
+import dev.badapple.render.backends.QuadrantRenderer;
 import dev.badapple.render.backends.SixelRenderer;
 import dev.badapple.render.colorizers.Colorizers;
 
@@ -38,6 +39,10 @@ public final class Bench {
         Renderer renderer;
         Colorizer colorizer;
         switch (mode) {
+            case "quadrant-mono" -> {
+                renderer = new QuadrantRenderer(ColorDepth.TRUECOLOR);
+                colorizer = Colorizers.create("mono", null);
+            }
             case "halfblock-gradient" -> {
                 renderer = new HalfBlockRenderer(ColorDepth.TRUECOLOR);
                 colorizer = Colorizers.create("gradient", "aurora");
