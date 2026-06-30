@@ -9,11 +9,11 @@ import java.util.Locale;
 
 /**
  * Chooses a render backend from detected capabilities, honoring an explicit {@code --renderer}
- * override. Auto prefers quadrant blocks (2x2 subpixels per cell — the sharpest text option,
- * and fast enough for smooth 30fps), falling back to half-blocks and then ASCII on terminals
- * without Unicode or color. The image protocols (kitty/iTerm/sixel) are higher fidelity but
- * re-encode every frame and can't sustain the frame rate, so they're opt-in via
- * {@code --renderer} rather than auto-selected.
+ * override. Auto prefers a real image protocol when the terminal has one (kitty &gt; iTerm &gt;
+ * sixel) — full pixel resolution and smooth shading, and fast enough at the default mono color
+ * now that the loop is properly paced. Without an image protocol it falls back to half-blocks
+ * (smooth grayscale) and then ASCII. Quadrant blocks are sharper-but-blockier and stay opt-in
+ * via {@code --renderer quadrant}.
  */
 public final class RendererFactory {
 
@@ -34,10 +34,19 @@ public final class RendererFactory {
     }
 
     private static Renderer auto(TerminalCapabilities caps) {
+        if (caps.kitty) {
+            return new KittyRenderer();
+        }
+        if (caps.iterm) {
+            return new ITermRenderer();
+        }
+        if (caps.sixel) {
+            return new SixelRenderer();
+        }
         if (!caps.unicode || caps.colorDepth == ColorDepth.NONE) {
             return new AsciiRenderer(caps.colorDepth);
         }
-        return new QuadrantRenderer(caps.colorDepth);
+        return new HalfBlockRenderer(caps.colorDepth);
     }
 
     private static ColorDepth colorOrDefault(ColorDepth depth) {

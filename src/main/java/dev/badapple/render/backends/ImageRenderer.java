@@ -15,7 +15,7 @@ abstract class ImageRenderer implements Renderer {
 
     private static final int DEFAULT_CELL_W = 8;
     private static final int DEFAULT_CELL_H = 16;
-    private static final int MAX_PIXELS = 1_200_000; // bound encode/transmit work per frame
+    private static final int MAX_PIXELS = 900_000; // bound encode/transmit work per frame
 
     /** Cell footprint the image should occupy, captured from the last gridSize() call. */
     protected int cols = 1;

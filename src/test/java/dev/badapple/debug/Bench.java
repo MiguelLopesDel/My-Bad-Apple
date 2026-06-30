@@ -51,6 +51,10 @@ public final class Bench {
                 renderer = new SixelRenderer();
                 colorizer = Colorizers.create("gradient", "aurora");
             }
+            case "sixel-mono" -> {
+                renderer = new SixelRenderer();
+                colorizer = Colorizers.create("mono", null);
+            }
             default -> {
                 renderer = new HalfBlockRenderer(ColorDepth.TRUECOLOR);
                 colorizer = Colorizers.create("mono", null);

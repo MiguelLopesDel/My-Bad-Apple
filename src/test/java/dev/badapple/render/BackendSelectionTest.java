@@ -5,6 +5,7 @@ import dev.badapple.render.backends.AsciiRenderer;
 import dev.badapple.render.backends.HalfBlockRenderer;
 import dev.badapple.render.backends.QuadrantRenderer;
 import dev.badapple.render.backends.RendererFactory;
+import dev.badapple.render.backends.SixelRenderer;
 import dev.badapple.render.colorizers.MonoColorizer;
 import dev.badapple.terminal.TerminalCapabilities;
 import org.junit.jupiter.api.Test;
@@ -20,20 +21,29 @@ class BackendSelectionTest {
     }
 
     @Test
-    void autoPicksQuadrantForColorUnicodeTerminal() {
+    void autoPicksHalfBlockForColorUnicodeTerminalWithoutImage() {
         TerminalCapabilities caps = new TerminalCapabilities();
         caps.unicode = true;
         caps.colorDepth = ColorDepth.TRUECOLOR;
-        assertInstanceOf(QuadrantRenderer.class, RendererFactory.create(caps, autoArgs()));
+        assertInstanceOf(HalfBlockRenderer.class, RendererFactory.create(caps, autoArgs()));
     }
 
     @Test
-    void explicitHalfblockStillAvailable() {
+    void autoPrefersSixelWhenAvailable() {
         TerminalCapabilities caps = new TerminalCapabilities();
         caps.unicode = true;
         caps.colorDepth = ColorDepth.TRUECOLOR;
-        assertInstanceOf(HalfBlockRenderer.class,
-                RendererFactory.create(caps, Args.parse(new String[]{"--renderer", "halfblock"})));
+        caps.sixel = true;
+        assertInstanceOf(SixelRenderer.class, RendererFactory.create(caps, autoArgs()));
+    }
+
+    @Test
+    void explicitQuadrantStillAvailable() {
+        TerminalCapabilities caps = new TerminalCapabilities();
+        caps.unicode = true;
+        caps.colorDepth = ColorDepth.TRUECOLOR;
+        assertInstanceOf(QuadrantRenderer.class,
+                RendererFactory.create(caps, Args.parse(new String[]{"--renderer", "quadrant"})));
     }
 
     @Test

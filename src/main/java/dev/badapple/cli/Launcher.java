@@ -36,13 +36,13 @@ public final class Launcher {
             "palette mapped by brightness",
     };
     private static final String[] RENDERER_HINTS = {
-            "auto-detect (sharp quadrant blocks)",
-            "2x2 blocks — sharpest text",
+            "best for your terminal (image if it can)",
+            "2x2 blocks — sharp but blocky edges",
             "1x2 blocks — smooth grayscale",
             "plain characters, no Unicode",
-            "kitty image protocol (slower)",
-            "sixel image protocol (slower)",
-            "iTerm image protocol (slower)",
+            "kitty image protocol — full resolution",
+            "sixel image protocol — full resolution",
+            "iTerm image protocol — full resolution",
     };
 
     private static final int FIELD_COUNT = 4;

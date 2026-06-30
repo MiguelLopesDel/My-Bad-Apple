@@ -69,20 +69,22 @@ mono look). Pass any flag to skip the menu and run directly.
 
 The player probes the terminal and falls back gracefully, so it runs everywhere.
 
-Auto-selection prefers **quadrant blocks** (a 2×2 subpixel grid per character — the sharpest
-text option) because they render fast enough for smooth 30fps with full truecolor, and on a
-1-bit source like Bad Apple they look crisp:
+Auto-selection prefers a real **image protocol** when the terminal has one — full pixel
+resolution and smooth shading, fast enough at the default mono color:
 
 | Terminal | Auto backend |
 |----------|--------------|
-| Most truecolor terminals (kitty, foot, Alacritty, Konsole, GNOME Terminal, WezTerm…) | quadrant blocks, 24-bit color |
-| VS Code / IntelliJ integrated terminals | quadrant blocks, 256 color |
+| kitty, WezTerm | kitty graphics (full-resolution image) |
+| iTerm2 | iTerm inline images |
+| foot, xterm/Konsole with sixel | sixel (full-resolution image) |
+| other truecolor terminals (Alacritty, GNOME Terminal…) | half-blocks, 24-bit color |
+| VS Code / IntelliJ integrated terminals | half-blocks, 256 color |
 | no UTF-8 / minimal terminals | ASCII |
 
-`--renderer halfblock` gives the smoother (lower-resolution) 1×2 look if you prefer it. The
-image protocols (`kitty`, `iterm`, `sixel`) are higher fidelity but re-encode the whole frame
-every frame, so they can't sustain the frame rate. They're available on demand via
-`--renderer kitty|iterm|sixel` (great for a paused still), just not auto-selected.
+For text terminals, `--renderer quadrant` packs a 2×2 subpixel grid per cell (sharper, but
+blockier edges) and `--renderer halfblock` is the smoother 1×2 look. Colorful modes
+(`hue`/`gradient`) cost more to encode as images, so on a slow terminal a text renderer may
+feel smoother — press `Ctrl-H` to watch the real frame rate and switch if needed.
 
 Run with `--debug` to see exactly what was detected, and press `Ctrl-H` during playback to see
 the true frame rate plus a per-frame render/write timing breakdown.
