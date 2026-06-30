@@ -46,6 +46,15 @@ tasks.register<JavaExec>("generateAsset") {
     args("source/Touhou - Bad Apple.mp4", "src/main/resources/badapple")
 }
 
+// Headless ASCII preview of a single frame, for verifying the decode/downscale pipeline.
+tasks.register<JavaExec>("preview") {
+    group = "verification"
+    description = "Prints one frame of the asset as ASCII (args: 'frame cols rows')"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.badapple.debug.Preview"
+    args = ((project.findProperty("args") as String?) ?: "3000 100 45").split(" ")
+}
+
 tasks.shadowJar {
     archiveBaseName = "my-bad-apple"
     archiveClassifier = ""

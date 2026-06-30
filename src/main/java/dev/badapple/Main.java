@@ -1,17 +1,39 @@
 package dev.badapple;
 
+import dev.badapple.asset.AssetReader;
+import dev.badapple.engine.Player;
+import dev.badapple.render.Colorizer;
+import dev.badapple.render.Renderer;
+import dev.badapple.render.backends.HalfBlockRenderer;
+import dev.badapple.render.colorizers.MonoColorizer;
+
+import java.io.InputStream;
+
 /**
  * Entry point for the My Bad Apple terminal player.
  *
- * <p>Parses CLI args, detects terminal capabilities, picks a renderer and drives
- * the player. This is a skeleton; the pipeline is built up across the phases.
+ * <p>Loads the embedded asset, picks a renderer and colorizer, and runs the player.
+ * Capability detection, color modes and controls are wired in across later phases.
  */
 public final class Main {
+
+    private static final String ASSET = "/badapple/frames.bin";
 
     private Main() {
     }
 
-    public static void main(String[] args) {
-        System.out.println("My Bad Apple — work in progress");
+    public static void main(String[] args) throws Exception {
+        try (InputStream in = Main.class.getResourceAsStream(ASSET)) {
+            if (in == null) {
+                System.err.println("Embedded asset not found: " + ASSET
+                        + " (run './gradlew generateAsset')");
+                System.exit(1);
+                return;
+            }
+            AssetReader asset = AssetReader.load(in);
+            Renderer renderer = new HalfBlockRenderer();
+            Colorizer colorizer = new MonoColorizer();
+            new Player(asset, renderer, colorizer).play();
+        }
     }
 }
