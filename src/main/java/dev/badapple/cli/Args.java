@@ -79,6 +79,7 @@ public final class Args {
                   space              pause / resume
                   left / right       seek -5s / +5s
                   up / down, +/-     speed up / slow down
+                  ctrl-h             toggle the FPS counter
                   q, Esc             quit
                 """;
     }

@@ -58,6 +58,7 @@ That's it — no ffmpeg, no native libraries, no extra setup.
 | `space` | pause / resume |
 | `←` / `→` | seek −5s / +5s |
 | `↑` / `↓`, `+` / `-` | speed up / slow down |
+| `Ctrl-H` | toggle the FPS counter (real presented frames/sec) |
 | `q`, `Esc` | quit |
 
 ## Terminal support

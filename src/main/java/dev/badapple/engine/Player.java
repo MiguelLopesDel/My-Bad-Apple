@@ -4,6 +4,8 @@ import dev.badapple.asset.AssetReader;
 import dev.badapple.asset.Frame;
 import dev.badapple.cli.Args;
 import dev.badapple.render.Ansi;
+import dev.badapple.render.AnsiColor;
+import dev.badapple.render.ColorDepth;
 import dev.badapple.render.Colorizer;
 import dev.badapple.render.Downscaler;
 import dev.badapple.render.GrayGrid;
@@ -18,6 +20,7 @@ import org.jline.utils.NonBlockingReader;
 
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.util.Locale;
 
 /**
  * Drives playback: detects the terminal, picks a renderer, then renders frames against a
@@ -27,12 +30,19 @@ import java.io.PrintWriter;
 public final class Player {
 
     private static final double SEEK_SECONDS = 5.0;
-    private static final long INPUT_BUDGET_MS = 20;
+    private static final long MAX_WAIT_MS = 100;
+    private static final long HUD_INTERVAL_NANOS = 150_000_000L;
+    private static final int HUD_GREEN = 0x4ADE80;
+    private static final int HUD_YELLOW = 0xFACC15;
+    private static final int HUD_RED = 0xF87171;
 
     private final AssetReader asset;
     private final Colorizer colorizer;
     private final InputStream audioStream;
     private final Args args;
+    private final FpsMeter fpsMeter = new FpsMeter();
+    private boolean showHud;
+    private long lastHudNanos;
 
     public Player(AssetReader asset, Colorizer colorizer, InputStream audioStream, Args args) {
         this.asset = asset;
@@ -108,7 +118,10 @@ public final class Player {
 
         Layout layout = Layout.compute(terminal, renderer, caps, asset);
         StringBuilder sb = new StringBuilder(layout.screen.width * layout.screen.height * 4);
+        StringBuilder hud = new StringBuilder(64);
         int lastRendered = -1;
+        boolean hudShown = false;
+        int lastHudFrame = -1;
 
         while (true) {
             // Pick up terminal resizes.
@@ -137,12 +150,63 @@ public final class Player {
                 w.print(sb);
                 w.flush();
                 lastRendered = idx;
+                fpsMeter.record(System.nanoTime());
             }
 
-            if (handleInput(reader, timeline)) {
+            long now = System.nanoTime();
+            if (showHud) {
+                if (!hudShown || idx != lastHudFrame || now - lastHudNanos >= HUD_INTERVAL_NANOS) {
+                    drawHud(w, hud, layout.cols, fps, timeline, caps.colorDepth, now);
+                    lastHudNanos = now;
+                    lastHudFrame = idx;
+                }
+                hudShown = true;
+            } else if (hudShown) {
+                // Toggled off: wipe the overlay and force a clean repaint underneath.
+                w.print(Ansi.CLEAR);
+                w.flush();
+                lastRendered = -1;
+                hudShown = false;
+            }
+
+            if (handleInput(reader, timeline, pacingBudgetMs(timeline, idx, fps))) {
                 break;
             }
         }
+    }
+
+    /** Milliseconds to wait for input before the next frame is due, so frames land on time. */
+    private long pacingBudgetMs(Timeline timeline, int idx, double fps) {
+        if (timeline.isPaused()) {
+            return 40;
+        }
+        double speed = Math.max(0.05, timeline.speed());
+        double aheadMs = ((idx + 1) / fps - timeline.seconds()) / speed * 1000.0;
+        long ms = (long) Math.floor(aheadMs);
+        if (ms < 1) {
+            return 1;
+        }
+        return Math.min(ms, MAX_WAIT_MS);
+    }
+
+    /** Draws the true-FPS overlay in the top-right corner (toggled with Ctrl-H). */
+    private void drawHud(PrintWriter w, StringBuilder hud, int cols, double targetFps,
+                         Timeline timeline, ColorDepth depth, long now) {
+        double fps = fpsMeter.fps(now);
+        String label = String.format(Locale.ROOT, " %.1f fps · %.0f target · %.2fx ",
+                fps, targetFps, timeline.speed());
+        int col = Math.max(1, cols - label.length() + 1);
+        int fg = fps >= 0.9 * targetFps ? HUD_GREEN : fps >= 0.6 * targetFps ? HUD_YELLOW : HUD_RED;
+
+        hud.setLength(0);
+        Ansi.moveTo(hud, 1, col);
+        if (depth != ColorDepth.NONE) {
+            AnsiColor.appendBg(hud, 0x101010, depth);
+            AnsiColor.appendFg(hud, fg, depth);
+        }
+        hud.append(label).append(Ansi.RESET);
+        w.print(hud);
+        w.flush();
     }
 
     private void renderFrame(Renderer renderer, Layout layout, int idx, int frameCount, StringBuilder sb) {
@@ -158,9 +222,9 @@ public final class Player {
         renderer.render(layout.screen, colorizer, (double) idx / frameCount, sb);
     }
 
-    /** Reads keys for a short budget (which also paces the loop). Returns true to quit. */
-    private boolean handleInput(NonBlockingReader reader, Timeline timeline) throws Exception {
-        long end = System.currentTimeMillis() + INPUT_BUDGET_MS;
+    /** Reads keys until the given budget elapses (which also paces the loop). Returns true to quit. */
+    private boolean handleInput(NonBlockingReader reader, Timeline timeline, long budgetMs) throws Exception {
+        long end = System.currentTimeMillis() + budgetMs;
         long remaining;
         while ((remaining = end - System.currentTimeMillis()) > 0) {
             int c = reader.read(remaining);
@@ -174,6 +238,7 @@ public final class Player {
                 case ' ' -> timeline.togglePause();
                 case '+', '=' -> timeline.changeSpeed(1.25);
                 case '-', '_' -> timeline.changeSpeed(0.8);
+                case 8 -> showHud = !showHud; // Ctrl-H
                 case 27 -> {
                     if (handleEscape(reader, timeline)) {
                         return true;
