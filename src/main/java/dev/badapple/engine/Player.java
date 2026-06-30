@@ -26,6 +26,9 @@ import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -136,9 +139,15 @@ public final class Player {
 
     private void runLoop(Terminal terminal, OutputStream out, Charset enc, Renderer renderer,
                          Timeline timeline, TerminalCapabilities caps) throws Exception {
-        NonBlockingReader reader = terminal.reader();
         int frameCount = asset.frameCount();
         double fps = effectiveFps();
+
+        // Read input on a dedicated thread: plain blocking read() is the one thing JLine does
+        // reliably (its read(timeout) overshoots and ready() can under-report on some terminals).
+        // The main loop just drains this queue, so input never blocks or skews pacing.
+        BlockingQueue<Integer> keys = new LinkedBlockingQueue<>();
+        AtomicBoolean reading = new AtomicBoolean(true);
+        Thread inputThread = startInputThread(terminal.reader(), keys, reading);
 
         LineRenderer lineRenderer = renderer instanceof LineRenderer lr ? lr : null;
         Layout layout = Layout.compute(terminal, renderer, caps, asset);
@@ -150,6 +159,7 @@ public final class Player {
         boolean hudShown = false;
         int lastHudFrame = -1;
 
+        try {
         while (true) {
             // Pick up terminal resizes (flagged by the SIGWINCH handler).
             if (resized) {
@@ -223,12 +233,37 @@ public final class Player {
             }
 
             long p0 = System.nanoTime();
-            boolean quit = pace(reader, timeline, pacingBudgetMs(timeline, idx, fps));
+            boolean quit = pace(keys, timeline, pacingBudgetMs(timeline, idx, fps));
             emaIdleMs = ema(emaIdleMs, (System.nanoTime() - p0) / 1e6);
             if (quit) {
                 break;
             }
         }
+        } finally {
+            reading.set(false);
+            inputThread.interrupt();
+        }
+    }
+
+    /** Starts a daemon thread that feeds keystrokes into {@code keys} via blocking reads. */
+    private static Thread startInputThread(NonBlockingReader reader, BlockingQueue<Integer> keys,
+                                           AtomicBoolean reading) {
+        Thread t = new Thread(() -> {
+            try {
+                while (reading.get()) {
+                    int c = reader.read();
+                    if (c == NonBlockingReader.EOF) {
+                        break;
+                    }
+                    keys.offer(c);
+                }
+            } catch (IOException ignored) {
+                // Terminal closed; thread exits.
+            }
+        }, "badapple-input");
+        t.setDaemon(true);
+        t.start();
+        return t;
     }
 
     private static String[] newLineBuffer(LineRenderer renderer, Layout layout) {
@@ -302,11 +337,12 @@ public final class Player {
      * blocking timed read, whose timeout JLine can overshoot badly on some terminals. Returns
      * true to quit.
      */
-    private boolean pace(NonBlockingReader reader, Timeline timeline, long budgetMs) throws Exception {
+    private boolean pace(BlockingQueue<Integer> keys, Timeline timeline, long budgetMs) {
         long deadline = System.nanoTime() + budgetMs * 1_000_000L;
         while (true) {
-            while (reader.ready()) {
-                if (handleKey(reader, timeline, reader.read())) {
+            Integer c;
+            while ((c = keys.poll()) != null) {
+                if (handleKey(keys, timeline, c)) {
                     return true;
                 }
             }
@@ -319,7 +355,7 @@ public final class Player {
     }
 
     /** Dispatches one key. Returns true to quit. */
-    private boolean handleKey(NonBlockingReader reader, Timeline timeline, int c) throws Exception {
+    private boolean handleKey(BlockingQueue<Integer> keys, Timeline timeline, int c) {
         if (c < 0 || c == 'q' || c == 'Q' || c == 3) {
             return true;
         }
@@ -327,9 +363,9 @@ public final class Player {
             case ' ' -> timeline.togglePause();
             case '+', '=' -> timeline.changeSpeed(1.25);
             case '-', '_' -> timeline.changeSpeed(0.8);
-            case 8 -> showHud = !showHud; // Ctrl-H
+            case 8, 127 -> showHud = !showHud; // Ctrl-H (and the Backspace key, which sends DEL)
             case 27 -> {
-                return handleEscape(reader, timeline);
+                return handleEscape(keys, timeline);
             }
             default -> { /* ignore */ }
         }
@@ -337,13 +373,13 @@ public final class Player {
     }
 
     /** Handles an escape sequence (arrow keys); a lone ESC quits. */
-    private boolean handleEscape(NonBlockingReader reader, Timeline timeline) throws Exception {
-        int c2 = awaitByte(reader, 40);
+    private boolean handleEscape(BlockingQueue<Integer> keys, Timeline timeline) {
+        int c2 = awaitKey(keys, 40);
         if (c2 < 0) {
             return true; // lone ESC: quit
         }
         if (c2 == '[' || c2 == 'O') {
-            int c3 = awaitByte(reader, 40);
+            int c3 = awaitKey(keys, 40);
             switch (c3) {
                 case 'C' -> timeline.seek(SEEK_SECONDS);   // right
                 case 'D' -> timeline.seek(-SEEK_SECONDS);  // left
@@ -355,12 +391,13 @@ public final class Player {
         return false;
     }
 
-    /** Waits up to {@code budgetMs} for one buffered byte (parkNanos polling); -1 on timeout. */
-    private int awaitByte(NonBlockingReader reader, long budgetMs) throws Exception {
+    /** Waits up to {@code budgetMs} for the next queued key; -1 on timeout. */
+    private int awaitKey(BlockingQueue<Integer> keys, long budgetMs) {
         long deadline = System.nanoTime() + budgetMs * 1_000_000L;
         while (true) {
-            if (reader.ready()) {
-                return reader.read();
+            Integer c = keys.poll();
+            if (c != null) {
+                return c;
             }
             if (System.nanoTime() >= deadline) {
                 return -1;
