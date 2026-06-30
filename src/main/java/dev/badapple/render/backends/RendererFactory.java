@@ -9,8 +9,10 @@ import java.util.Locale;
 
 /**
  * Chooses a render backend from detected capabilities, honoring an explicit {@code --renderer}
- * override. Auto priority: image protocols (kitty &gt; iTerm &gt; sixel) when available,
- * otherwise half-blocks for color+Unicode terminals, falling back to ASCII.
+ * override. Auto prefers half-blocks (fast enough for smooth 30fps with full truecolor),
+ * falling back to ASCII on terminals without Unicode or color. The image protocols
+ * (kitty/iTerm/sixel) are higher fidelity but re-encode every frame and can't sustain the
+ * frame rate, so they're opt-in via {@code --renderer} rather than auto-selected.
  */
 public final class RendererFactory {
 
@@ -30,15 +32,6 @@ public final class RendererFactory {
     }
 
     private static Renderer auto(TerminalCapabilities caps) {
-        if (caps.kitty) {
-            return new KittyRenderer();
-        }
-        if (caps.iterm) {
-            return new ITermRenderer();
-        }
-        if (caps.sixel) {
-            return new SixelRenderer();
-        }
         if (!caps.unicode || caps.colorDepth == ColorDepth.NONE) {
             return new AsciiRenderer(caps.colorDepth);
         }

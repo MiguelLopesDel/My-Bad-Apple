@@ -73,6 +73,15 @@ tasks.register<JavaExec>("imageDump") {
     args = ((project.findProperty("args") as String?) ?: "image-dump.png 3000 lut fire").split(" ")
 }
 
+// Headless per-frame benchmark (no terminal) to locate the playback bottleneck.
+tasks.register<JavaExec>("bench") {
+    group = "verification"
+    description = "Times the render pipeline headless (args: 'mode cols rows frames')"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.badapple.debug.Bench"
+    args = ((project.findProperty("args") as String?) ?: "halfblock-mono 190 50 600").split(" ")
+}
+
 tasks.shadowJar {
     archiveBaseName = "my-bad-apple"
     archiveClassifier = ""

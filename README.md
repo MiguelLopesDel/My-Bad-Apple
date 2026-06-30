@@ -63,19 +63,23 @@ That's it — no ffmpeg, no native libraries, no extra setup.
 
 ## Terminal support
 
-The player probes the terminal and falls back gracefully, so it runs everywhere — it just
-looks better where the terminal can do more.
+The player probes the terminal and falls back gracefully, so it runs everywhere.
 
-| Terminal | Backend chosen |
-|----------|----------------|
-| kitty, WezTerm | kitty graphics (true image) |
-| iTerm2 | iTerm inline images |
-| foot, Konsole, xterm (sixel) | sixel (true image) |
-| Alacritty, GNOME Terminal, most truecolor terminals | half-blocks, 24-bit color |
+Auto-selection prefers **half-blocks** because they render fast enough for smooth 30fps with
+full truecolor — and on a 1-bit source like Bad Apple they look great:
+
+| Terminal | Auto backend |
+|----------|--------------|
+| Most truecolor terminals (kitty, foot, Alacritty, Konsole, GNOME Terminal, WezTerm…) | half-blocks, 24-bit color |
 | VS Code / IntelliJ integrated terminals | half-blocks, 256 color |
 | no UTF-8 / minimal terminals | ASCII |
 
-Run with `--debug` to see exactly what was detected.
+The image protocols (`kitty`, `iterm`, `sixel`) are higher fidelity but re-encode the whole
+frame every frame, so they can't sustain the frame rate. They're available on demand via
+`--renderer kitty|iterm|sixel` (great for a paused still), just not auto-selected.
+
+Run with `--debug` to see exactly what was detected, and press `Ctrl-H` during playback to see
+the true frame rate plus a per-frame render/write timing breakdown.
 
 ## How it works
 

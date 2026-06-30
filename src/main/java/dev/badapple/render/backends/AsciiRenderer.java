@@ -5,25 +5,32 @@ import dev.badapple.render.AnsiColor;
 import dev.badapple.render.ColorDepth;
 import dev.badapple.render.Colorizer;
 import dev.badapple.render.GrayGrid;
-import dev.badapple.render.Renderer;
+import dev.badapple.render.LineRenderer;
 
 /**
  * Fallback renderer for terminals without Unicode half-blocks. One character per cell from a
  * luminance density ramp; optionally tinted when the terminal has color. Averages the two
- * subpixels of each text row so it shares the same grid as the half-block renderer.
+ * subpixels of each text row so it shares the same grid as the half-block renderer. Each row
+ * is self-contained, so the player can skip rows that didn't change.
  */
-public final class AsciiRenderer implements Renderer {
+public final class AsciiRenderer implements LineRenderer {
 
     private static final String RAMP = " .:-=+*#%@";
 
     private final ColorDepth depth;
+    private final StringBuilder line = new StringBuilder(256);
 
     public AsciiRenderer(ColorDepth depth) {
         this.depth = depth;
     }
 
     @Override
-    public void render(GrayGrid grid, Colorizer colorizer, double t, StringBuilder out) {
+    public int lineCount(GrayGrid grid) {
+        return grid.height / 2;
+    }
+
+    @Override
+    public void renderLines(GrayGrid grid, Colorizer colorizer, double t, String[] out) {
         int cols = grid.width;
         int subRows = grid.height;
         int textRows = subRows / 2;
@@ -32,7 +39,7 @@ public final class AsciiRenderer implements Renderer {
         boolean colored = depth != ColorDepth.NONE;
 
         for (int r = 0; r < textRows; r++) {
-            Ansi.moveTo(out, r + 1, 1);
+            line.setLength(0);
             int lastFg = -1;
             int yTop = r * 2;
             int yBot = r * 2 + 1;
@@ -43,15 +50,26 @@ public final class AsciiRenderer implements Renderer {
                 if (colored) {
                     int fg = colorizer.rgb((double) c / maxX, yN, lum, t) & 0xFFFFFF;
                     if (fg != lastFg) {
-                        AnsiColor.appendFg(out, fg, depth);
+                        AnsiColor.appendFg(line, fg, depth);
                         lastFg = fg;
                     }
                 }
-                out.append(RAMP.charAt(idx));
+                line.append(RAMP.charAt(idx));
             }
             if (colored) {
-                out.append(Ansi.RESET);
+                line.append(Ansi.RESET);
             }
+            out[r] = line.toString();
+        }
+    }
+
+    @Override
+    public void render(GrayGrid grid, Colorizer colorizer, double t, StringBuilder out) {
+        String[] rows = new String[lineCount(grid)];
+        renderLines(grid, colorizer, t, rows);
+        for (int r = 0; r < rows.length; r++) {
+            Ansi.moveTo(out, r + 1, 1);
+            out.append(rows[r]);
         }
     }
 }
